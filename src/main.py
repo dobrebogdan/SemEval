@@ -1,6 +1,7 @@
 import csv
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+import numpy as np
 
 lemmatizer = WordNetLemmatizer()
 english_stopwords = stopwords.words('english')
@@ -94,26 +95,28 @@ def find_dist(sent1, sent2):
 test_sentence_score = get_sentence_score(clean_sentence(
     "Mr Little said they would provide better and quicker treatment for those in need"))
 
-min_dist = 10000.0
-label = 0
+
+
+train_data = []
+train_labels = []
+for negative_example in negative_examples:
+    try:
+        train_data.append(get_sentence_score(clean_sentence(negative_example)))
+        train_labels.append(0)
+    except:
+        pass
+
+
 
 for positive_example in positive_examples:
     try:
-        dist = find_dist(test_sentence_score, get_sentence_score(clean_sentence(positive_example)))
+        train_data.append(get_sentence_score(clean_sentence(positive_example)))
+        train_labels.append(1)
     except:
         pass
-    if dist < min_dist:
-        min_dist = dist
-        label = 1
 
-for negative_example in negative_examples:
-    try:
-        dist = find_dist(test_sentence_score, get_sentence_score(clean_sentence(negative_example)))
-    except:
-        pass
-    if dist < min_dist:
-        min_dist = dist
-        label = 0
+train_data = np.array(train_data)
+train_labels = np.array(train_labels)
 
-print(min_dist)
-print(label)
+print(np.shape(train_data))
+print(np.shape(train_labels))
