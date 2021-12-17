@@ -1,5 +1,5 @@
 import csv
-from keras import layers, Sequential
+from tensorflow.keras import layers, Sequential
 import numpy as np
 from keras.preprocessing.text import Tokenizer
 import matplotlib.pyplot as plt
@@ -72,26 +72,30 @@ def build_examples():
     return (train_data, train_labels)
 
 
-
 (train_data, train_labels) = build_examples()
-train_data = np.array(train_data)
-train_labels = np.array(train_labels)
-y_train = train_labels
-y_test = train_labels
+train_data = np.array(train_data).astype(np.float32)
+train_labels = np.array(train_labels).astype(np.float32)
+y_train = np.array(train_labels).astype(np.float32)
+y_test = np.copy(train_labels)
 
 
 tokenizer = Tokenizer(num_words=5000)
 tokenizer.fit_on_texts(train_data)
 
 
-X_train = tokenizer.texts_to_sequences(train_data)
-X_test = tokenizer.texts_to_sequences(train_data)
+X_train_raw = np.array(tokenizer.texts_to_sequences(train_data))
+X_train = []
+for train_sample in X_train_raw:
+    X_train.append(np.array(train_sample).astype(np.float32))
+X_train = np.array(X_train)
+X_test = np.copy(X_train)
+
 
 vocab_size = len(tokenizer.word_index) + 1  # Adding 1 because of reserve
 embedding_dim = 50
 maxlen = 100
 
-embedding_matrix = create_embedding_matrix('data/glove_word_embeddings/glove.6B.50d.txt',
+embedding_matrix = create_embedding_matrix('../dataset/glove.6B.50d.txt',
                                            tokenizer.word_index, embedding_dim)
 
 model = Sequential()
@@ -107,13 +111,17 @@ model.compile(optimizer='adam',
               metrics=['accuracy'])
 model.summary()
 
-history = model.fit(X_train, y_train,
+print("##")
+print(type(X_train[:1]))
+
+
+history = model.fit(X_train[:1], y_train[:1],
                     epochs=50,
                     verbose=False,
-                    validation_data=(X_test, y_test),
+                    validation_data=(X_test[:1], y_test[:1]),
                     batch_size=10)
-loss, accuracy = model.evaluate(X_train, y_train, verbose=False)
+loss, accuracy = model.evaluate(X_train[:1], y_train[:1], verbose=False)
 print("Training Accuracy: {:.4f}".format(accuracy))
-loss, accuracy = model.evaluate(X_test, y_test, verbose=False)
+loss, accuracy = model.evaluate(X_test[:1], y_test[:1], verbose=False)
 print("Testing Accuracy:  {:.4f}".format(accuracy))
 plot_history(history)
