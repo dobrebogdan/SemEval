@@ -34,7 +34,8 @@ def read_fie_rows(file_path):
 
 
 def build_examples():
-    pcl_rows = read_fie_rows('../dataset/dontpatronizeme_pcl.tsv')[2000:]
+    pcl_rows = read_fie_rows('../dataset/dontpatronizeme_pcl.tsv')[2000:8000]
+    pcl_rows_test = read_fie_rows('../dataset/dontpatronizeme_pcl.tsv')[8000:]
     categories_rows = read_fie_rows('../dataset/dontpatronizeme_categories.tsv')[2000:]
 
     positive_examples = []
@@ -205,17 +206,8 @@ plt.show()
 real_predictions = model.predict(train_examples)
 predictions = [int(real_prediction >= 0.0) for real_prediction in real_predictions]
 print(predictions)
-zeros = 0
-ones = 0
-for prediction in predictions:
-    ones += prediction
-    zeros += (1-prediction)
+with open("output.csv", "w") as file:
+    csv_writer = csv.writer(file, delimiter=',')
+    for prediction in predictions:
+        csv_writer.writerow(str(prediction))
 
-print(f"Zeros={zeros}, Ones={ones}")
-zeros = 0
-ones = 0
-for label in train_labels:
-    ones += int(label)
-    zeros += (1-int(label))
-
-print(f"Real zeros={zeros}, Real ones={ones}")
