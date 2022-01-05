@@ -1,9 +1,12 @@
-import numpy as np
+# TODO: shuffle
 import tensorflow as tf
 import csv
+import nltk
+import numpy as np
+nltk.download('omw-1.4')
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-import numpy as np
+from sklearn.model_selection import KFold
 
 lemmatizer = WordNetLemmatizer()
 english_stopwords = stopwords.words('english')
@@ -117,97 +120,63 @@ for positive_example in positive_examples:
     except:
         pass
 
+def get_model():
+    train_dataset = tf.data.Dataset.from_tensor_slices((train_examples, train_labels))
+
+    for example, label in train_dataset.take(1):
+        print('text: ', example.numpy())
+        print('label: ', label.numpy())
+
+    BUFFER_SIZE = 10000
+    BATCH_SIZE = 64
+
+    train_dataset = train_dataset.shuffle(BUFFER_SIZE).batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
+    for example, label in train_dataset.take(1):
+        print('texts: ', example.numpy()[:3])
+        print()
+        print('labels: ', label.numpy()[:3])
+
+    VOCAB_SIZE = 1000
+    encoder = tf.keras.layers.TextVectorization(
+        max_tokens=VOCAB_SIZE)
+    encoder.adapt(train_dataset.map(lambda text, label: text))
+    model = tf.keras.Sequential([
+        encoder,
+        tf.keras.layers.Embedding(
+            input_dim=len(encoder.get_vocabulary()),
+            output_dim=64,
+            # Use masking to handle the variable sequence lengths
+            mask_zero=True),
+        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64)),
+        tf.keras.layers.Dense(64, activation='relu'),
+        tf.keras.layers.Dense(1)
+    ])
+    model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+                  optimizer=tf.keras.optimizers.Adam(1e-4),
+                  metrics=['accuracy'])
+    return model
+
+kfold = KFold(n_splits=5, shuffle=True)
+kfold_split = kfold.split(train_examples, train_labels)
+
 train_examples = np.array(train_examples)
 train_labels = np.array(train_labels)
 
-
-import matplotlib.pyplot as plt
-
-
-def plot_graphs(history, metric):
-  plt.plot(history.history[metric])
-  plt.plot(history.history['val_'+metric], '')
-  plt.xlabel("Epochs")
-  plt.ylabel(metric)
-  plt.legend([metric, 'val_'+metric])
-
-train_dataset = tf.data.Dataset.from_tensor_slices((train_examples, train_labels))
-test_dataset = tf.data.Dataset.from_tensor_slices((train_examples, train_labels))
-
-
-for example, label in train_dataset.take(1):
-  print('text: ', example.numpy())
-  print('label: ', label.numpy())
-
-BUFFER_SIZE = 10000
-BATCH_SIZE = 64
-
-train_dataset = train_dataset.shuffle(BUFFER_SIZE).batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
-test_dataset = test_dataset.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
-
-for example, label in train_dataset.take(1):
-  print('texts: ', example.numpy()[:3])
-  print()
-  print('labels: ', label.numpy()[:3])
-
-VOCAB_SIZE = 1000
-encoder = tf.keras.layers.TextVectorization(
-    max_tokens=VOCAB_SIZE)
-encoder.adapt(train_dataset.map(lambda text, label: text))
-
-vocab = np.array(encoder.get_vocabulary())
-vocab[:20]
-
-encoded_example = encoder(example)[:3].numpy()
-
-print(encoded_example)
-
-for n in range(3):
-  print("Original: ", example[n].numpy())
-  print("Round-trip: ", " ".join(vocab[encoded_example[n]]))
-  print('\n')
-
-model = tf.keras.Sequential([
-    encoder,
-    tf.keras.layers.Embedding(
-        input_dim=len(encoder.get_vocabulary()),
-        output_dim=64,
-        # Use masking to handle the variable sequence lengths
-        mask_zero=True),
-    tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64)),
-    tf.keras.layers.Dense(64, activation='relu'),
-    tf.keras.layers.Dense(1)
-])
-
-print([layer.supports_masking for layer in model.layers])
-
-model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
-              optimizer=tf.keras.optimizers.Adam(1e-4),
-              metrics=['accuracy'])
-
-history = model.fit(train_dataset, epochs=10,
-                    validation_data=test_dataset,
-                    validation_steps=30)
-
-test_loss, test_acc = model.evaluate(test_dataset)
-
-print('Test Loss:', test_loss)
-print('Test Accuracy:', test_acc)
-
-plt.figure(figsize=(16, 8))
-plt.subplot(1, 2, 1)
-plot_graphs(history, 'accuracy')
-plt.ylim(None, 1)
-plt.subplot(1, 2, 2)
-plot_graphs(history, 'loss')
-plt.ylim(0, None)
-plt.show()
-
-real_predictions = model.predict(train_examples)
-predictions = [int(real_prediction >= 0.0) for real_prediction in real_predictions]
-print(predictions)
-with open("output.csv", "w") as file:
-    csv_writer = csv.writer(file, delimiter=',')
-    for prediction in predictions:
-        csv_writer.writerow(str(prediction))
-
+step = 0
+accuracies = []
+# iterating through the different splits
+for curr_train, curr_test in kfold_split:
+    step += 1
+    model = get_model()
+    # training the model
+    model.fit(train_examples[curr_train], train_labels[curr_train], batch_size=32, epochs=15)
+    # getting the evaluation results
+    results = model.evaluate(train_examples[curr_test], train_labels[curr_test])
+    # printing the loss and accuracy
+    print(f'Step {step}: Loss - {results[0]}, Accuracy - {results[1]}')
+    accuracies.append(results[1])
+    # writing the results to an output file
+with open('results.csv', 'w') as file:
+    writer = csv.writer(file, delimiter=',')
+    for accuracy in accuracies:
+        writer.writerow(str(accuracy))
