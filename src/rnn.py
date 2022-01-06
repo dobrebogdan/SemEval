@@ -3,7 +3,6 @@ import tensorflow as tf
 import csv
 import nltk
 import numpy as np
-nltk.download('omw-1.4')
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.model_selection import KFold
@@ -37,8 +36,7 @@ def read_fie_rows(file_path):
 
 
 def build_examples():
-    pcl_rows = read_fie_rows('../dataset/dontpatronizeme_pcl.tsv')[2000:8000]
-    pcl_rows_test = read_fie_rows('../dataset/dontpatronizeme_pcl.tsv')[8000:]
+    pcl_rows = read_fie_rows('../dataset/dontpatronizeme_pcl.tsv')[2000:]
     categories_rows = read_fie_rows('../dataset/dontpatronizeme_categories.tsv')[2000:]
 
     positive_examples = []
@@ -75,32 +73,12 @@ def create_model():
 create_model()
 model.wv.load('./model.bin')
 
-def get_sentence_score(sentence):
-    sentence_tokens = sentence.split(" ")
-    sentence_score = None
-    for token in sentence_tokens:
-        try:
-            if sentence_score is None:
-                sentence_score = model.wv[token]
-            else:
-                sentence_score = sentence_score + model.wv[token]
-        except:
-            pass
-
-    sentence_score = sentence_score / len(sentence_tokens)
-    return sentence_score
-
 
 def find_dist(sent1, sent2):
     dist = 0
     for i in range(0, sent1.size):
         dist += (sent1[i] - sent2[i]) * (sent1[i] - sent2[i])
     return dist
-
-
-test_sentence_score = get_sentence_score(clean_sentence(
-    "Mr Little said they would provide better and quicker treatment for those in need"))
-
 
 
 train_examples = []
@@ -169,13 +147,19 @@ for curr_train, curr_test in kfold_split:
     step += 1
     model = get_model()
     # training the model
+    print(train_examples[:10])
     model.fit(train_examples[curr_train], train_labels[curr_train], batch_size=32, epochs=15)
+    model.save('./model.bin');
     # getting the evaluation results
     results = model.evaluate(train_examples[curr_test], train_labels[curr_test])
     # printing the loss and accuracy
     print(f'Step {step}: Loss - {results[0]}, Accuracy - {results[1]}')
     accuracies.append(results[1])
-    # writing the results to an output file
+
+
+    break
+
+# writing the results to an output file
 with open('results.csv', 'w') as file:
     writer = csv.writer(file, delimiter=',')
     for accuracy in accuracies:
